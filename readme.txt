@@ -1,0 +1,2 @@
+I implemented A Restful client that uses multi-threading to maximize the performance. Large tasks are divided into multiple subtasks. 
+Results are collected after all sub tasks completed by the use of CountDownLatch.
