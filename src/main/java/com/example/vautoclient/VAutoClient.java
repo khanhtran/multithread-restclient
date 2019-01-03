@@ -12,8 +12,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.Callable;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -34,37 +32,6 @@ public class VAutoClient {
 	public VAutoClient(RestTemplate restTemplate, String baseUrl) {
 		this.restTemplate = restTemplate;
 		this.baseUrl = baseUrl;
-	}
-
-	public void processSequential() {
-		System.out.println("Building data...");
-		long t = System.currentTimeMillis();
-		Dataset dataset = getDataset();
-		Set<Integer> vehicleIds = getVehicleIDs(dataset.getDatasetId());
-		Map<Integer, List<Vehicle>> dealerVehiclesMap = new HashMap<>();
-		for (int vehicleId : vehicleIds) {
-			Vehicle vehicle = getVehicle(dataset.getDatasetId(), vehicleId);
-			Integer dealerId = vehicle.getDealerId();
-			if (dealerVehiclesMap.containsKey(dealerId)) {
-				dealerVehiclesMap.get(dealerId).add(vehicle);
-			} else {
-				List<Vehicle> lst = new ArrayList<>();
-				lst.add(vehicle);
-				dealerVehiclesMap.put(dealerId, lst);
-			}
-
-		}
-		List<Dealer> dealers = new ArrayList<>();
-		for (int dealerId : dealerVehiclesMap.keySet()) {
-			Dealer dealer = getDealer(dataset.getDatasetId(), dealerId);
-			dealer.setVehicles(dealerVehiclesMap.get(dealerId));
-			dealers.add(dealer);
-		}
-		long t1 = System.currentTimeMillis();
-		System.out.println("Building data: " + (t1 - t));
-		postAnswer(dataset.getDatasetId(), dealers);
-		long t2 = System.currentTimeMillis();
-		System.out.println("Posting answer: " + (t2 - t1));
 	}
 
 	public void process() {
@@ -95,13 +62,14 @@ public class VAutoClient {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+		threadPool.shutdown();
 		/* all threads had completed */
-		ExecutorService threadPools2 = Executors.newFixedThreadPool(dealerVehiclesMap.size());
+		ExecutorService threadPool2 = Executors.newFixedThreadPool(dealerVehiclesMap.size());
 		final CountDownLatch latch2 = new CountDownLatch(dealerVehiclesMap.size());
 		List<Dealer> dealers = new CopyOnWriteArrayList<>();
 
 		for (int dealerId : dealerVehiclesMap.keySet()) {
-			threadPools2.submit(() -> {
+			threadPool2.submit(() -> {
 				Dealer dealer = getDealer(dataset.getDatasetId(), dealerId);
 				dealer.setVehicles(dealerVehiclesMap.get(dealerId));
 				dealers.add(dealer);
@@ -114,7 +82,7 @@ public class VAutoClient {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		
+		threadPool2.shutdown();
 		long t1 = System.currentTimeMillis();
 		System.out.println("Building data: " + (t1 - t));
 		postAnswer(dataset.getDatasetId(), dealers);
